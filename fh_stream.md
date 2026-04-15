@@ -2,11 +2,11 @@
  * @Author: ischen.x ischen.x@foxmail.com
  * @Date: 2025-03-03 14:00:39
  * @LastEditors: ischen.x ischen.x@foxmail.com
- * @LastEditTime: 2025-03-03 14:54:34
+ * @LastEditTime: 2026-04-15 18:04:14
  * 
  * Copyright (c) 2025 by fhchengz, All Rights Reserved. 
 -->
-# 基于TLV的XXX传输协议
+# 基于TLV的fh_stream传输协议
 ||head|tag|length|value|crc|
 |-|-|-|-|-|-|
 |示例1|0x55AA|0x00|0x01|0x12|0xXX|
