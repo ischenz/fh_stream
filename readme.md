@@ -16,7 +16,7 @@
 * tag     帧类型，帧标识
 * length  帧长度(仅指示value字段的长度)
 * value   帧数据
-* crc crc 校验数据
+* crc crc 校验数据 (计算字段包含tag,length,value)
 
 
 ###### C语言表示
