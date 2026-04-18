@@ -13,13 +13,14 @@
 
 #include <stdio.h>
 
-#define FH_STREAM_HEAD      (0x55)
+#define FH_STREAM_HEAD        (0x55)
+#define FH_STREAM_CRC_DEFAULT (0xEE) // CRC 字段填充默认值，没有设置crc校验算法时使用
 
 typedef uint8_t head_type;
 typedef uint8_t tag_type;
 typedef uint8_t length_type;
 typedef uint8_t value_type;
-typedef uint8_t crc_type;
+typedef uint32_t crc_type;
 
 typedef enum {
     FH_STREAM_EVENT_NULL = 0,
@@ -50,6 +51,7 @@ typedef struct __attribute__((packed)) _fh_stream_frame {
     //crc 单独处理
 } fh_stream_frame_t;
 
+int fh_stream_set_crc_func(crc_type (*crc_func)(uint8_t *data, size_t len));
 int fh_stream_pack(uint8_t *buffer, tag_type tag, value_type *data, length_type data_len);
 fh_event_t fh_stream_unpack(uint8_t buffer, fh_stream_frame_t *freame);
 

@@ -9,6 +9,14 @@
 #include "fh_stream.h"
 #include <string.h>
 
+static crc_type (*fh_stream_crc)(uint8_t *data, size_t len) = NULL;
+
+int fh_stream_set_crc_func(crc_type (*crc_func)(uint8_t *data, size_t len)) 
+{
+    fh_stream_crc = crc_func;
+    return 0; // 占位，实际实现根据需要设置CRC函数
+}
+
 int fh_stream_pack(uint8_t *buffer, tag_type tag, value_type *data, length_type data_len) 
 {
     fh_stream_frame_t *frame = (fh_stream_frame_t *)buffer;
@@ -17,7 +25,12 @@ int fh_stream_pack(uint8_t *buffer, tag_type tag, value_type *data, length_type 
     frame->length = data_len;
     memcpy(frame->value, data, data_len);
     // crc 计算和添加
-    *(crc_type *)&frame->value[data_len] = 0xEE; // 占位，实际crc计算后覆盖
+    if (fh_stream_crc) {
+        crc_type crc = fh_stream_crc((uint8_t *)&(frame->tag), sizeof(fh_stream_frame_t) - sizeof(head_type) + data_len);
+        *(crc_type *)&frame->value[data_len] = crc; // 将CRC放在数据后面
+    } else {
+        memset(&frame->value[data_len], FH_STREAM_CRC_DEFAULT, sizeof(crc_type)); // crc 默认0xEE，占位
+    }
     return sizeof(fh_stream_frame_t) + data_len + sizeof(crc_type);
 }
 
@@ -32,13 +45,6 @@ typedef fh_event_t (*fh_state_handler_t)(uint8_t byte);
 
 static uint8_t fream_buff[sizeof(fh_stream_rx_context_t) + (1 << sizeof(length_type) * 8)]; // 用于接收数据的缓冲区，大小足够存放一个完整的帧和上下文
 static fh_stream_rx_context_t *rx_context = (fh_stream_rx_context_t *)fream_buff;
-
-static crc_type fh_stream_crc(uint8_t *data, length_type len) 
-{
-    (void *)data;
-    (void *)len;
-    return 0xEE; // 占位，实际crc计算逻辑根据需要实现
-}
 
 // 等待帧头状态
 static fh_event_t fh_state_idle(uint8_t byte)
@@ -81,13 +87,21 @@ static fh_event_t fh_state_value(uint8_t byte)
 
 static fh_event_t fh_state_crc(uint8_t byte)
 {
-    rx_context->crc = byte;
-    if (fh_stream_crc((uint8_t *)&rx_context->frame.length, sizeof(fh_stream_frame_t) - sizeof(head_type) + rx_context->frame.length) != byte) { // 占位crc校验失败
-        rx_context->state = FH_STREAM_RX_STATE_IDLE; // 重置状态机
-        return FH_STREAM_EVENT_ERROR_CRC; // crc错误事件
+    static int crc_idx = 0; // 用于接收CRC的索引
+    *(((uint8_t*)(&(rx_context->crc))) + crc_idx++) = byte;
+    if (crc_idx >= sizeof(crc_type)) { // CRC接收完成
+        crc_idx = 0; // 重置CRC索引
+        uint32_t crc_calculated = fh_stream_crc((uint8_t *)&rx_context->frame.tag, sizeof(fh_stream_frame_t) - sizeof(head_type) + rx_context->frame.length);
+        if (crc_calculated != rx_context->crc) { // CRC校验失败
+            rx_context->state = FH_STREAM_RX_STATE_IDLE; // 重置状态机
+            return FH_STREAM_EVENT_ERROR_CRC; // crc错误事件
+        } else { // crc校验成功，准备返回完整帧
+            rx_context->state = FH_STREAM_RX_STATE_IDLE; // 重置状态机
+            return FH_STREAM_EVENT_FRAME_RECEIVED; // 成功接收完整帧
+        }
+    } else {
+        return FH_STREAM_EVENT_NULL; // 继续接收CRC字节
     }
-    rx_context->state = FH_STREAM_RX_STATE_IDLE; // 重置状态机
-    return FH_STREAM_EVENT_FRAME_RECEIVED; // 成功接收完整帧
 }
 
 static const fh_state_handler_t state_handlers[] = {
